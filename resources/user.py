@@ -1,7 +1,7 @@
 from flask_restful import Resource, reqparse
-from flask_jwt_extended import create_access_token
-from models.user import UserModel
+from flask_jwt_extended import create_access_token, create_refresh_token
 from werkzeug.security import safe_str_cmp
+from models.user import UserModel
 
 class UserRegister(Resource):
 
@@ -42,12 +42,32 @@ class UserLogin(Resource):
     )
 
     def post(self):
-        data = UserRegister.parser.parse_args()
+        data = self.parser.parse_args()
         
         user = UserModel.find_by_username(data['username'])
         if user and safe_str_cmp(user.password, data['password']):
-                access_token = create_access_token(identity=user.username)
-                return {"token": access_token}
-        return {'message': "Bad credentials."}
+                access_token = create_access_token(identity=user.id, fresh=True)
+                refresh_token = create_refresh_token(user.id)
+                return {
+                    "access_token": access_token,
+                    'refresh_token': refresh_token
+                }, 200
+        return {'message': "Invalid credentials."}, 401
         
-            
+
+class User(Resource):
+
+    @classmethod
+    def get(cls, user_id):
+        user = UserModel.find_by_id(user_id)
+        if not user:
+            return {'message': 'User not found'}, 404
+        return user.json()
+
+    @classmethod
+    def delete(cls, user_id):
+        user = UserModel.find_by_id(user_id)
+        if not user:
+            return {'message': 'User not found'}, 404
+        user.delete_from_db()
+        return {'message':'User deleted.'}, 200

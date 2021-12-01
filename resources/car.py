@@ -1,5 +1,5 @@
 from flask_restful import Resource, reqparse
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 from models.car import CarModel
 
 def add_arguments(parser):
@@ -41,23 +41,35 @@ class Car(Resource):
     parser = reqparse.RequestParser()
     add_arguments(parser)
 
-    def get(self, _id):
-        car = CarModel.find_by_id(_id)
+    def get(self, car_id):
+        car = CarModel.find_by_id(car_id)
         if car:
             return car.json()
         return {'message': 'Car not found'}, 404
-    
-    
 
+    @jwt_required()
+    def delete(self, car_id):
+        claims = get_jwt()
+        if not claims['is_admin']:
+            return {'message': 'Admin privilege required.'}, 401
+
+        car = CarModel.find_by_id(car_id)
+        if car:
+            car.delete_from_db()
+            return {'message': 'Car deleted.'}
+        return {'message': 'Car not found'}, 404
+
+    
+    
     
 class Cars(Resource):
     def get(self):
-        return {'cars':[car.json() for car in CarModel.query.all()]}
+        return {'cars':[car.json() for car in CarModel.find_all()]}
 
     @jwt_required()
     def post(self):
         data = Car.parser.parse_args()
-        car = CarModel(data['brand'], data['model'], data['year'], data['image'], data['mileage'], data['vin'], data['price'])
+        car = CarModel(**data)
         try:
             car.save_to_db()
         except:
